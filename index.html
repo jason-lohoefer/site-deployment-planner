@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Site Deployment Planner</title>
+    <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
@@ -16,28 +17,60 @@
         <section>
             <h2>Upcoming Deployments</h2>
 
-            <h3>North Campus</h3>
-            <p>Location: Austin, TX</p>
-            <p>Planned Date: September 15, 2026</p>
-            <p>Status: Planned</p>
+            <div class="filter-buttons">
+                <button class="filter-btn active" data-filter="all">All</button>
+                <button class="filter-btn" data-filter="planned">Planned</button>
+                <button class="filter-btn" data-filter="ready">Ready</button>
+                <button class="filter-btn" data-filter="in-progress">In Progress</button>
+                <button class="filter-btn" data-filter="completed">Completed</button>
+            </div>
 
-            <h3>West Operations Center</h3>
-            <p>Location: Denver, CO</p>
-            <p>Planned Date: September 22, 2026</p>
-            <p>Status: Ready</p>
+            <div class="deployment-list">
+
+                <div class="deployment-site" data-status="planned">
+                    <h3>Austin Campus</h3>
+                    <p>Location: Austin, TX</p>
+                    <p>Planned Date: September 15, 2026</p>
+                    <p>Status: Planned</p>
+                </div>
+
+                <div class="deployment-site" data-status="ready">
+                    <h3>Denver Operations Center</h3>
+                    <p>Location: Denver, CO</p>
+                    <p>Planned Date: September 22, 2026</p>
+                    <p>Status: Ready</p>
+                </div>
+
+                <div class="deployment-site" data-status="in-progress">
+                    <h3>Dallas Distribution Center</h3>
+                    <p>Location: Dallas, TX</p>
+                    <p>Planned Date: September 10, 2026</p>
+                    <p>Status: In Progress</p>
+                </div>
+
+                <div class="deployment-site" data-status="completed">
+                    <h3>Phoenix Regional Office</h3>
+                    <p>Location: Phoenix, AZ</p>
+                    <p>Planned Date: September 5, 2026</p>
+                    <p>Status: Completed</p>
+                </div>
+
+            </div>
         </section>
 
         <section>
             <h2>Deployment Summary</h2>
             <p>Planned: 1</p>
             <p>Ready: 1</p>
-            <p>In Progress: 0</p>
-            <p>Completed: 0</p>
+            <p>In Progress: 1</p>
+            <p>Completed: 1</p>
         </section>
     </main>
 
     <footer>
         <p>Site Deployment Planner</p>
     </footer>
+
+    <script src="script.js"></script>
 </body>
 </html>
