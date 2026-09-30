@@ -1,389 +1,600 @@
-const filterButtons = document.querySelectorAll(".filter-btn");
+const statusLabels = {
+    planned: "Planned",
+    ready: "Ready",
+    "in-progress": "In Progress",
+    completed: "Completed"
+};
 
+const initialDeployments = [
+    {
+        id: "example-1",
+        siteCode: "SITE 01",
+        name: "Austin Campus",
+        location: "Austin, Texas",
+        date: "2026-09-15",
+        scope: "Network + Camera",
+        devices: 18,
+        status: "planned"
+    },
+    {
+        id: "example-2",
+        siteCode: "SITE 02",
+        name: "Denver Operations Center",
+        location: "Denver, Colorado",
+        date: "2026-09-22",
+        scope: "Camera Expansion",
+        devices: 24,
+        status: "ready"
+    },
+    {
+        id: "example-3",
+        siteCode: "SITE 03",
+        name: "Dallas Distribution Center",
+        location: "Dallas, Texas",
+        date: "2026-09-10",
+        scope: "Full Site Rollout",
+        devices: 32,
+        status: "in-progress"
+    },
+    {
+        id: "example-4",
+        siteCode: "SITE 04",
+        name: "Phoenix Regional Office",
+        location: "Phoenix, Arizona",
+        date: "2026-09-05",
+        scope: "Security Upgrade",
+        devices: 16,
+        status: "completed"
+    }
+];
+
+const storageKey = "siteDeploymentsV2";
+const deploymentForm = document.getElementById("deployment-form");
+const deploymentList = document.getElementById("deployment-list");
 const searchInput = document.getElementById("site-search");
 const resultCount = document.getElementById("result-count");
 const emptyState = document.getElementById("empty-state");
+const saveMessage = document.getElementById("save-message");
+const cancelButton = document.getElementById("cancel-edit");
+const submitButton = document.getElementById("submit-button");
+const filterButtons = document.querySelectorAll(".filter-btn");
 
-const deploymentForm = document.getElementById("deployment-form");
-const deploymentList = document.querySelector(".deployment-list");
+const fieldIds = {
+    name: "site-name",
+    location: "site-location",
+    date: "deployment-date",
+    scope: "deployment-scope",
+    devices: "device-count",
+    status: "deployment-status"
+};
 
 let activeFilter = "all";
+let editingId = null;
+let storageNeedsRecovery = false;
 
-function getDeploymentSites() {
-    return document.querySelectorAll(".deployment-site");
+function createId() {
+    if (
+        globalThis.crypto &&
+        typeof globalThis.crypto.randomUUID === "function"
+    ) {
+        return globalThis.crypto.randomUUID();
+    }
+
+    return `site-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
-function updateDeployments() {
-    const searchTerm = searchInput.value.toLowerCase().trim();
-    const deploymentSites = getDeploymentSites();
+function isValidDate(value) {
+    if (
+        typeof value !== "string" ||
+        !/^\d{4}-\d{2}-\d{2}$/.test(value)
+    ) {
+        return false;
+    }
 
-    let visibleSites = 0;
+    const date = new Date(`${value}T00:00:00`);
 
-    deploymentSites.forEach((site) => {
-        const siteStatus = site.getAttribute("data-status");
-        const searchData = site.getAttribute("data-search").toLowerCase();
+    if (Number.isNaN(date.getTime())) {
+        return false;
+    }
 
-        const matchesFilter =
-            activeFilter === "all" || siteStatus === activeFilter;
+    const reconstructed =
+        `${String(date.getFullYear()).padStart(4, "0")}-` +
+        `${String(date.getMonth() + 1).padStart(2, "0")}-` +
+        `${String(date.getDate()).padStart(2, "0")}`;
 
-        const matchesSearch =
-            searchData.includes(searchTerm);
+    return reconstructed === value;
+}
 
-        if (matchesFilter && matchesSearch) {
-            site.style.display = "block";
-            visibleSites++;
-        } else {
-            site.style.display = "none";
-        }
+function isValidDeployment(deployment) {
+    if (!deployment || typeof deployment !== "object") {
+        return false;
+    }
+
+    const hasText = ["name", "location", "scope"].every((key) => {
+        return typeof deployment[key] === "string" &&
+            deployment[key].trim().length > 0;
     });
 
-    resultCount.textContent =
-        visibleSites === 1
-            ? "Showing 1 site"
-            : `Showing ${visibleSites} sites`;
+    const devices = Number(deployment.devices);
 
-    emptyState.style.display =
-        visibleSites === 0 ? "block" : "none";
+    return hasText &&
+        isValidDate(deployment.date) &&
+        Number.isInteger(devices) &&
+        devices > 0 &&
+        devices <= 1000000 &&
+        Object.prototype.hasOwnProperty.call(
+            statusLabels,
+            deployment.status
+        );
 }
 
-function updateDashboardCounts() {
-    const deploymentSites = getDeploymentSites();
+function copyExamples() {
+    return initialDeployments.map((deployment) => ({
+        ...deployment
+    }));
+}
 
-    const counts = {
-        total: deploymentSites.length,
-        planned: 0,
-        ready: 0,
-        "in-progress": 0,
-        completed: 0
-    };
+function loadDeployments() {
+    try {
+        const saved = localStorage.getItem(storageKey);
 
-    deploymentSites.forEach((site) => {
-        const status = site.getAttribute("data-status");
+        if (saved !== null) {
+            const parsed = JSON.parse(saved);
 
-        if (counts[status] !== undefined) {
-            counts[status]++;
+            if (!Array.isArray(parsed)) {
+                throw new Error("Invalid saved data.");
+            }
+
+            const ids = new Set();
+
+            const valid = parsed.every((deployment) => {
+                if (
+                    !isValidDeployment(deployment) ||
+                    typeof deployment.id !== "string" ||
+                    !deployment.id ||
+                    ids.has(deployment.id)
+                ) {
+                    return false;
+                }
+
+                ids.add(deployment.id);
+                return true;
+            });
+
+            if (!valid) {
+                throw new Error("Invalid saved data.");
+            }
+
+            return parsed;
         }
-    });
 
-    const statNumbers = document.querySelectorAll(".stat-number");
+        // Import deployments saved by the earlier version.
+        // Keep its storage key unchanged as a backup.
+        const previous = localStorage.getItem("siteDeployments");
 
-    if (statNumbers.length >= 4) {
-        statNumbers[0].textContent = counts.total;
-        statNumbers[1].textContent = counts.ready;
-        statNumbers[2].textContent = counts["in-progress"];
-        statNumbers[3].textContent = counts.completed;
-    }
+        if (previous === null) {
+            return copyExamples();
+        }
 
-    const summaryNumbers =
-        document.querySelectorAll(".summary-grid strong");
+        const oldDeployments = JSON.parse(previous);
 
-    if (summaryNumbers.length >= 4) {
-        summaryNumbers[0].textContent = counts.planned;
-        summaryNumbers[1].textContent = counts.ready;
-        summaryNumbers[2].textContent = counts["in-progress"];
-        summaryNumbers[3].textContent = counts.completed;
-    }
+        if (
+            !Array.isArray(oldDeployments) ||
+            !oldDeployments.every(isValidDeployment)
+        ) {
+            throw new Error("Invalid earlier saved data.");
+        }
 
-    const summaryText =
-        document.querySelector(".summary-copy > p:last-child");
+        const imported = oldDeployments.map((deployment, index) => ({
+            ...deployment,
+            id: createId(),
+            siteCode: `SITE ${String(index + 5).padStart(2, "0")}`
+        }));
 
-    if (summaryText) {
-        summaryText.textContent =
-            `${counts.total} locations are being tracked during the current deployment cycle. ` +
-            `${counts.completed} completed, ` +
-            `${counts["in-progress"]} in progress, ` +
-            `${counts.ready} ready, and ` +
-            `${counts.planned} planned.`;
+        return [...copyExamples(), ...imported];
+    } catch {
+        storageNeedsRecovery = true;
+
+        saveMessage.textContent =
+            "Saved data could not be loaded. Example sites are shown. " +
+            "Your existing stored data has not been changed.";
+
+        return copyExamples();
     }
 }
 
-function formatDate(dateValue) {
-    const date = new Date(`${dateValue}T00:00:00`);
+let deployments = loadDeployments();
 
-    return date.toLocaleDateString("en-US", {
+function localToday() {
+    const date = new Date();
+
+    return `${date.getFullYear()}-` +
+        `${String(date.getMonth() + 1).padStart(2, "0")}-` +
+        `${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function isOverdue(deployment) {
+    return deployment.status !== "completed" &&
+        deployment.date < localToday();
+}
+
+function formatDate(value) {
+    return new Date(`${value}T00:00:00`).toLocaleDateString("en-US", {
         month: "short",
         day: "numeric",
         year: "numeric"
     });
 }
 
-function getStatusDetails(status) {
-    const statusDetails = {
-        planned: {
-            label: "Planned",
-            readiness: "Planning",
-            progress: 25
-        },
+function saveDeployments(nextDeployments) {
+    if (storageNeedsRecovery) {
+        const confirmed = window.confirm(
+            "The previous saved data could not be loaded. " +
+            "Save this new list in its place?"
+        );
 
-        ready: {
-            label: "Ready",
-            readiness: "Confirmed",
-            progress: 70
-        },
-
-        "in-progress": {
-            label: "In Progress",
-            readiness: "On Site",
-            progress: 85
-        },
-
-        completed: {
-            label: "Completed",
-            readiness: "Complete",
-            progress: 100
+        if (!confirmed) {
+            return false;
         }
-    };
-
-    return statusDetails[status];
-}
-
-function createDeploymentCard(deployment) {
-    const statusDetails =
-        getStatusDetails(deployment.status);
-
-    const newSite =
-        document.createElement("article");
-
-    newSite.className = "deployment-site";
-
-    newSite.setAttribute(
-        "data-status",
-        deployment.status
-    );
-
-    newSite.setAttribute(
-        "data-search",
-        `${deployment.name} ${deployment.location}`.toLowerCase()
-    );
-
-    newSite.innerHTML = `
-        <div class="card-top">
-            <span class="site-code">
-                ${deployment.siteCode}
-            </span>
-
-            <span class="status-badge ${deployment.status}">
-                ${statusDetails.label}
-            </span>
-        </div>
-
-        <h3>${deployment.name}</h3>
-
-        <p class="location">
-            ${deployment.location}
-        </p>
-
-        <div class="card-details">
-
-            <div>
-                <span>Deployment Date</span>
-                <strong>
-                    ${formatDate(deployment.date)}
-                </strong>
-            </div>
-
-            <div>
-                <span>Deployment Scope</span>
-                <strong>
-                    ${deployment.scope}
-                </strong>
-            </div>
-
-            <div>
-                <span>Devices</span>
-                <strong>
-                    ${deployment.devices}
-                </strong>
-            </div>
-
-            <div>
-                <span>Readiness</span>
-                <strong>
-                    ${statusDetails.readiness}
-                </strong>
-            </div>
-
-        </div>
-
-        <div class="progress-area">
-
-            <div class="progress-heading">
-                <span>Deployment progress</span>
-                <strong>
-                    ${statusDetails.progress}%
-                </strong>
-            </div>
-
-            <div class="progress-track">
-                <div
-                    class="progress-fill"
-                    style="
-                        width: ${statusDetails.progress}%;
-                        ${
-                            deployment.status === "completed"
-                                ? "background: var(--complete);"
-                                : ""
-                        }
-                    "
-                ></div>
-            </div>
-
-        </div>
-    `;
-
-    deploymentList.appendChild(newSite);
-
-    return newSite;
-}
-
-function getSavedDeployments() {
-    const saved =
-        localStorage.getItem("siteDeployments");
-
-    if (!saved) {
-        return [];
     }
 
     try {
-        return JSON.parse(saved);
-    } catch (error) {
-        return [];
+        localStorage.setItem(
+            storageKey,
+            JSON.stringify(nextDeployments)
+        );
+
+        deployments = nextDeployments;
+        storageNeedsRecovery = false;
+        return true;
+    } catch {
+        saveMessage.textContent =
+            "Unable to save. Browser storage may be blocked or full. " +
+            "Your deployment list has not changed.";
+
+        return false;
     }
 }
 
-function saveDeployments(deployments) {
-    localStorage.setItem(
-        "siteDeployments",
-        JSON.stringify(deployments)
+// Use textContent so entered text is displayed safely.
+function createElement(tag, className, text) {
+    const element = document.createElement(tag);
+
+    if (className) {
+        element.className = className;
+    }
+
+    if (text !== undefined) {
+        element.textContent = text;
+    }
+
+    return element;
+}
+
+function addDetail(container, label, value, valueClass = "") {
+    const detail = createElement("div");
+
+    detail.append(
+        createElement("span", "", label),
+        createElement("strong", valueClass, value)
     );
+
+    container.append(detail);
 }
 
-function loadSavedDeployments() {
-    const savedDeployments =
-        getSavedDeployments();
+function createDeploymentCard(deployment) {
+    const card = createElement("article", "deployment-site");
+    const top = createElement("div", "card-top");
 
-    savedDeployments.forEach((deployment) => {
-        createDeploymentCard(deployment);
+    card.dataset.status = deployment.status;
+
+    top.append(
+        createElement(
+            "span",
+            "site-code",
+            deployment.siteCode || "SITE"
+        ),
+        createElement(
+            "span",
+            `status-badge ${deployment.status}`,
+            statusLabels[deployment.status]
+        )
+    );
+
+    const details = createElement("div", "card-details");
+
+    addDetail(details, "Deployment Date", formatDate(deployment.date));
+    addDetail(details, "Deployment Scope", deployment.scope);
+    addDetail(details, "Devices", deployment.devices);
+
+    let scheduleLabel = "Upcoming";
+
+    if (deployment.status === "completed") {
+        scheduleLabel = "Completed";
+    } else if (isOverdue(deployment)) {
+        scheduleLabel = "Overdue";
+    } else if (deployment.date === localToday()) {
+        scheduleLabel = "Due today";
+    }
+
+    addDetail(
+        details,
+        "Schedule",
+        scheduleLabel,
+        isOverdue(deployment) ? "overdue" : ""
+    );
+
+    const actions = createElement("div", "card-actions");
+    const editButton = createElement("button", "secondary-btn", "Edit");
+    const deleteButton = createElement("button", "delete-btn", "Delete");
+
+    editButton.type = "button";
+    deleteButton.type = "button";
+
+    editButton.setAttribute("aria-label", `Edit ${deployment.name}`);
+    deleteButton.setAttribute("aria-label", `Delete ${deployment.name}`);
+
+    editButton.addEventListener("click", () => {
+        startEditing(deployment);
     });
+
+    deleteButton.addEventListener("click", () => {
+        deleteDeployment(deployment);
+    });
+
+    actions.append(editButton, deleteButton);
+
+    card.append(
+        top,
+        createElement("h3", "", deployment.name),
+        createElement("p", "location", deployment.location),
+        details,
+        actions
+    );
+
+    return card;
 }
+
+function updateDashboardCounts() {
+    const counts = {
+        planned: 0,
+        ready: 0,
+        "in-progress": 0,
+        completed: 0
+    };
+
+    deployments.forEach((deployment) => {
+        counts[deployment.status]++;
+    });
+
+    document.getElementById("total-count").textContent =
+        deployments.length;
+
+    document.getElementById("ready-count").textContent =
+        counts.ready;
+
+    document.getElementById("progress-count").textContent =
+        counts["in-progress"];
+
+    document.getElementById("completed-count").textContent =
+        counts.completed;
+
+    document.getElementById("summary-planned").textContent =
+        counts.planned;
+
+    document.getElementById("summary-ready").textContent =
+        counts.ready;
+
+    document.getElementById("summary-progress").textContent =
+        counts["in-progress"];
+
+    document.getElementById("summary-completed").textContent =
+        counts.completed;
+
+    const overdueCount = deployments.filter(isOverdue).length;
+
+    document.getElementById("summary-text").textContent =
+        `${deployments.length} sites are being tracked: ` +
+        `${counts.planned} planned, ${counts.ready} ready, ` +
+        `${counts["in-progress"]} in progress, and ` +
+        `${counts.completed} completed. ` +
+        `${overdueCount} ${overdueCount === 1 ? "site is" : "sites are"} overdue.`;
+
+    document.getElementById("today-label").textContent =
+        new Date().toLocaleDateString("en-US", {
+            month: "long",
+            day: "numeric",
+            year: "numeric"
+        });
+}
+
+function updateDeployments() {
+    const searchTerm = searchInput.value.toLowerCase().trim();
+
+    const visibleDeployments = deployments.filter((deployment) => {
+        const matchesFilter =
+            activeFilter === "all" ||
+            (
+                activeFilter === "overdue"
+                    ? isOverdue(deployment)
+                    : deployment.status === activeFilter
+            );
+
+        const searchableText =
+            `${deployment.name} ${deployment.location} ${deployment.scope}`
+                .toLowerCase();
+
+        return matchesFilter && searchableText.includes(searchTerm);
+    });
+
+    deploymentList.replaceChildren();
+
+    visibleDeployments.forEach((deployment) => {
+        deploymentList.append(createDeploymentCard(deployment));
+    });
+
+    resultCount.textContent =
+        `Showing ${visibleDeployments.length} of ${deployments.length} sites`;
+
+    emptyState.hidden = visibleDeployments.length > 0;
+
+    // Works with the existing CSS until we update it next.
+    emptyState.style.display =
+        visibleDeployments.length === 0 ? "block" : "none";
+
+    document.getElementById("empty-description").textContent =
+        deployments.length === 0
+            ? "Add a deployment above to start your schedule."
+            : "Try changing the filter or search term.";
+
+    filterButtons.forEach((button) => {
+        const selected = button.dataset.filter === activeFilter;
+
+        button.classList.toggle("active", selected);
+        button.setAttribute("aria-pressed", String(selected));
+    });
+
+    updateDashboardCounts();
+}
+
+function resetForm() {
+    editingId = null;
+    deploymentForm.reset();
+    cancelButton.hidden = true;
+
+    document.getElementById("form-heading").textContent =
+        "Add Deployment";
+
+    document.getElementById("form-eyebrow").textContent =
+        "NEW SITE";
+
+    submitButton.textContent = "Add Deployment";
+}
+
+function startEditing(deployment) {
+    editingId = deployment.id;
+
+    Object.entries(fieldIds).forEach(([key, id]) => {
+        document.getElementById(id).value = deployment[key];
+    });
+
+    document.getElementById("form-heading").textContent =
+        "Edit Deployment";
+
+    document.getElementById("form-eyebrow").textContent =
+        deployment.siteCode || "EDIT SITE";
+
+    submitButton.textContent = "Save Changes";
+    cancelButton.hidden = false;
+
+    saveMessage.textContent = `Editing ${deployment.name}.`;
+
+    document.getElementById("site-name").focus();
+}
+
+function deleteDeployment(deployment) {
+    const confirmed = window.confirm(
+        `Delete ${deployment.name}? This cannot be undone.`
+    );
+
+    if (!confirmed) {
+        return;
+    }
+
+    const nextDeployments = deployments.filter((item) => {
+        return item.id !== deployment.id;
+    });
+
+    if (!saveDeployments(nextDeployments)) {
+        return;
+    }
+
+    if (editingId === deployment.id) {
+        resetForm();
+    }
+
+    saveMessage.textContent = `${deployment.name} deleted.`;
+    updateDeployments();
+    searchInput.focus();
+}
+
+function nextSiteCode() {
+    const largestNumber = Math.max(
+        0,
+        ...deployments.map((deployment) => {
+            const match = String(deployment.siteCode).match(/^SITE (\d+)$/);
+            return match ? Number(match[1]) : 0;
+        })
+    );
+
+    return `SITE ${String(largestNumber + 1).padStart(2, "0")}`;
+}
+
+deploymentForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+
+    const values = {};
+
+    Object.entries(fieldIds).forEach(([key, id]) => {
+        values[key] = document.getElementById(id).value.trim();
+    });
+
+    values.devices = Number(values.devices);
+
+    if (!isValidDeployment(values)) {
+        saveMessage.textContent =
+            "Complete every field with valid information. " +
+            "Devices must be a whole number greater than zero.";
+
+        return;
+    }
+
+    const existing = deployments.find((deployment) => {
+        return deployment.id === editingId;
+    });
+
+    const deployment = {
+        ...values,
+        id: existing ? existing.id : createId(),
+        siteCode: existing ? existing.siteCode : nextSiteCode()
+    };
+
+    const nextDeployments = existing
+        ? deployments.map((item) => {
+            return item.id === existing.id ? deployment : item;
+        })
+        : [...deployments, deployment];
+
+    if (!saveDeployments(nextDeployments)) {
+        return;
+    }
+
+    saveMessage.textContent =
+        `${deployment.name} ${existing ? "updated" : "added"} ` +
+        "and saved in this browser.";
+
+    resetForm();
+    activeFilter = "all";
+    searchInput.value = "";
+    updateDeployments();
+});
+
+cancelButton.addEventListener("click", () => {
+    resetForm();
+    saveMessage.textContent = "Edit canceled. No changes were saved.";
+    document.getElementById("site-name").focus();
+});
+
+searchInput.addEventListener("input", updateDeployments);
 
 filterButtons.forEach((button) => {
     button.addEventListener("click", () => {
-
-        activeFilter =
-            button.getAttribute("data-filter");
-
-        filterButtons.forEach((btn) => {
-            btn.classList.remove("active");
-        });
-
-        button.classList.add("active");
-
+        activeFilter = button.dataset.filter;
         updateDeployments();
     });
 });
 
-searchInput.addEventListener(
-    "input",
-    updateDeployments
-);
+// Refresh date-based labels when returning to the page.
+window.addEventListener("focus", updateDeployments);
 
-deploymentForm.addEventListener(
-    "submit",
-    (event) => {
-
-        event.preventDefault();
-
-        const siteName =
-            document
-                .getElementById("site-name")
-                .value
-                .trim();
-
-        const siteLocation =
-            document
-                .getElementById("site-location")
-                .value
-                .trim();
-
-        const deploymentDate =
-            document
-                .getElementById("deployment-date")
-                .value;
-
-        const deploymentScope =
-            document
-                .getElementById("deployment-scope")
-                .value
-                .trim();
-
-        const deviceCount =
-            document
-                .getElementById("device-count")
-                .value;
-
-        const deploymentStatus =
-            document
-                .getElementById("deployment-status")
-                .value;
-
-        const currentSites =
-            getDeploymentSites();
-
-        const siteNumber =
-            currentSites.length + 1;
-
-        const siteCode =
-            `SITE ${String(siteNumber).padStart(2, "0")}`;
-
-        const deployment = {
-            siteCode: siteCode,
-            name: siteName,
-            location: siteLocation,
-            date: deploymentDate,
-            scope: deploymentScope,
-            devices: deviceCount,
-            status: deploymentStatus
-        };
-
-        createDeploymentCard(deployment);
-
-        const savedDeployments =
-            getSavedDeployments();
-
-        savedDeployments.push(deployment);
-
-        saveDeployments(savedDeployments);
-
-        deploymentForm.reset();
-
-        activeFilter = "all";
-
-        filterButtons.forEach((button) => {
-            button.classList.remove("active");
-
-            if (
-                button.getAttribute("data-filter") === "all"
-            ) {
-                button.classList.add("active");
-            }
-        });
-
-        searchInput.value = "";
-
-        updateDeployments();
-        updateDashboardCounts();
-
-        const newSite =
-            deploymentList.lastElementChild;
-
-        newSite.scrollIntoView({
-            behavior: "smooth",
-            block: "center"
-        });
-    }
-);
-
-loadSavedDeployments();
 updateDeployments();
-updateDashboardCounts();

@@ -3,16 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Organize and track technology deployments across multiple locations.">
     <title>Site Deployment Planner</title>
     <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
-
     <header class="topbar">
         <div class="topbar-inner">
             <div class="brand">
-                <div class="brand-mark">SD</div>
+                <div class="brand-mark" aria-hidden="true">SD</div>
                 <div>
                     <h1>Site Deployment Planner</h1>
                     <p>Technology Deployment Operations</p>
@@ -20,13 +20,16 @@
             </div>
 
             <div class="header-status">
-                <span class="status-dot"></span>
-                Deployment Schedule Active
+                <span class="status-dot" aria-hidden="true"></span>
+                Your deployment workspace
             </div>
         </div>
     </header>
 
     <main>
+        <noscript>
+            <p>Please enable JavaScript to use the deployment planner.</p>
+        </noscript>
 
         <section class="hero">
             <div>
@@ -34,63 +37,69 @@
                 <h2>Track every site from planning to completion.</h2>
 
                 <p class="hero-text">
-                    A centralized view of upcoming technology deployments,
-                    site readiness, schedules, and rollout progress.
+                    A centralized view of technology deployments,
+                    equipment requirements, schedules, and site status.
                 </p>
             </div>
 
             <div class="hero-date">
-                <span>Current Milestone</span>
-                <strong>September 2026</strong>
+                <span>Today</span>
+                <strong id="today-label"></strong>
             </div>
         </section>
 
-        <section class="stats-grid">
+        <section class="stats-grid" aria-label="Deployment totals">
             <div class="stat-card">
                 <div class="stat-label">Total Sites</div>
-                <div class="stat-number">4</div>
-                <div class="stat-detail">Current deployment cycle</div>
+                <div class="stat-number" id="total-count">0</div>
+                <div class="stat-detail">All tracked deployments</div>
             </div>
 
             <div class="stat-card">
                 <div class="stat-label">Ready</div>
-                <div class="stat-number">1</div>
+                <div class="stat-number" id="ready-count">0</div>
                 <div class="stat-detail">Prepared for deployment</div>
             </div>
 
             <div class="stat-card">
                 <div class="stat-label">In Progress</div>
-                <div class="stat-number">1</div>
+                <div class="stat-number" id="progress-count">0</div>
                 <div class="stat-detail">Currently being deployed</div>
             </div>
 
             <div class="stat-card">
                 <div class="stat-label">Completed</div>
-                <div class="stat-number">1</div>
-                <div class="stat-detail">Finished this cycle</div>
+                <div class="stat-number" id="completed-count">0</div>
+                <div class="stat-detail">Finished deployments</div>
             </div>
         </section>
 
-        <section class="add-deployment-section">
-
+        <section class="add-deployment-section" aria-labelledby="form-heading">
             <div class="section-heading">
                 <div>
-                    <p class="eyebrow">NEW SITE</p>
-                    <h2>Add Deployment</h2>
+                    <p class="eyebrow" id="form-eyebrow">NEW SITE</p>
+                    <h2 id="form-heading">Add Deployment</h2>
                 </div>
 
                 <p class="add-deployment-copy">
-                    Add a new site to the current deployment cycle.
+                    Changes are saved in this browser.
                 </p>
             </div>
 
-            <form id="deployment-form" class="deployment-form">
+            <p class="storage-note">
+                The four initial sites are fictional examples you can edit or remove.
+                Saved changes stay on this browser and device.
+            </p>
 
+            <p id="save-message" role="status" aria-live="polite"></p>
+
+            <form id="deployment-form" class="deployment-form">
                 <div class="form-field">
                     <label for="site-name">Site Name</label>
                     <input
                         type="text"
                         id="site-name"
+                        maxlength="100"
                         placeholder="Houston Operations Center"
                         required
                     >
@@ -101,6 +110,7 @@
                     <input
                         type="text"
                         id="site-location"
+                        maxlength="100"
                         placeholder="Houston, Texas"
                         required
                     >
@@ -120,6 +130,7 @@
                     <input
                         type="text"
                         id="deployment-scope"
+                        maxlength="150"
                         placeholder="Network + Camera"
                         required
                     >
@@ -131,6 +142,8 @@
                         type="number"
                         id="device-count"
                         min="1"
+                        max="1000000"
+                        step="1"
                         placeholder="20"
                         required
                     >
@@ -146,296 +159,150 @@
                     </select>
                 </div>
 
-                <button type="submit" class="add-deployment-btn">
-                    Add Deployment
-                </button>
+                <div class="form-actions">
+                    <button
+                        type="submit"
+                        class="add-deployment-btn primary-btn"
+                        id="submit-button"
+                    >
+                        Add Deployment
+                    </button>
 
+                    <button
+                        type="button"
+                        class="secondary-btn"
+                        id="cancel-edit"
+                        hidden
+                    >
+                        Cancel Edit
+                    </button>
+                </div>
             </form>
-
         </section>
 
-        <section class="deployments-section">
-
+        <section class="deployments-section" aria-labelledby="pipeline-heading">
             <div class="section-heading">
                 <div>
                     <p class="eyebrow">SITE SCHEDULE</p>
-                    <h2>Deployment Pipeline</h2>
+                    <h2 id="pipeline-heading">Deployment Pipeline</h2>
                 </div>
 
-                <p id="result-count">Showing 4 sites</p>
+                <p id="result-count" aria-live="polite"></p>
             </div>
 
             <div class="toolbar">
-
                 <div class="search-box">
                     <label for="site-search">Search deployments</label>
                     <input
                         type="search"
                         id="site-search"
-                        placeholder="Search city or site..."
+                        placeholder="Search site, location, or scope..."
                     >
                 </div>
 
                 <div class="filter-area">
-                    <span class="filter-label">Filter by status</span>
+                    <span class="filter-label">Filter deployments</span>
 
-                    <div class="filter-buttons">
-                        <button class="filter-btn active" data-filter="all">All</button>
-                        <button class="filter-btn" data-filter="planned">Planned</button>
-                        <button class="filter-btn" data-filter="ready">Ready</button>
-                        <button class="filter-btn" data-filter="in-progress">In Progress</button>
-                        <button class="filter-btn" data-filter="completed">Completed</button>
+                    <div
+                        class="filter-buttons"
+                        role="group"
+                        aria-label="Deployment filters"
+                    >
+                        <button
+                            type="button"
+                            class="filter-btn active"
+                            data-filter="all"
+                            aria-pressed="true"
+                        >All</button>
+
+                        <button
+                            type="button"
+                            class="filter-btn"
+                            data-filter="planned"
+                            aria-pressed="false"
+                        >Planned</button>
+
+                        <button
+                            type="button"
+                            class="filter-btn"
+                            data-filter="ready"
+                            aria-pressed="false"
+                        >Ready</button>
+
+                        <button
+                            type="button"
+                            class="filter-btn"
+                            data-filter="in-progress"
+                            aria-pressed="false"
+                        >In Progress</button>
+
+                        <button
+                            type="button"
+                            class="filter-btn"
+                            data-filter="completed"
+                            aria-pressed="false"
+                        >Completed</button>
+
+                        <button
+                            type="button"
+                            class="filter-btn"
+                            data-filter="overdue"
+                            aria-pressed="false"
+                        >Overdue</button>
                     </div>
                 </div>
-
             </div>
 
-            <div class="deployment-list">
+            <div id="deployment-list" class="deployment-list"></div>
 
-                <article
-                    class="deployment-site"
-                    data-status="planned"
-                    data-search="austin campus austin texas"
-                >
-                    <div class="card-top">
-                        <span class="site-code">SITE 01</span>
-                        <span class="status-badge planned">Planned</span>
-                    </div>
-
-                    <h3>Austin Campus</h3>
-                    <p class="location">Austin, Texas</p>
-
-                    <div class="card-details">
-                        <div>
-                            <span>Deployment Date</span>
-                            <strong>Sep 15, 2026</strong>
-                        </div>
-
-                        <div>
-                            <span>Deployment Scope</span>
-                            <strong>Network + Camera</strong>
-                        </div>
-
-                        <div>
-                            <span>Devices</span>
-                            <strong>18</strong>
-                        </div>
-
-                        <div>
-                            <span>Readiness</span>
-                            <strong>Planning</strong>
-                        </div>
-                    </div>
-
-                    <div class="progress-area">
-                        <div class="progress-heading">
-                            <span>Deployment progress</span>
-                            <strong>25%</strong>
-                        </div>
-
-                        <div class="progress-track">
-                            <div class="progress-fill progress-25"></div>
-                        </div>
-                    </div>
-                </article>
-
-                <article
-                    class="deployment-site"
-                    data-status="ready"
-                    data-search="denver operations center denver colorado"
-                >
-                    <div class="card-top">
-                        <span class="site-code">SITE 02</span>
-                        <span class="status-badge ready">Ready</span>
-                    </div>
-
-                    <h3>Denver Operations Center</h3>
-                    <p class="location">Denver, Colorado</p>
-
-                    <div class="card-details">
-                        <div>
-                            <span>Deployment Date</span>
-                            <strong>Sep 22, 2026</strong>
-                        </div>
-
-                        <div>
-                            <span>Deployment Scope</span>
-                            <strong>Camera Expansion</strong>
-                        </div>
-
-                        <div>
-                            <span>Devices</span>
-                            <strong>24</strong>
-                        </div>
-
-                        <div>
-                            <span>Readiness</span>
-                            <strong>Confirmed</strong>
-                        </div>
-                    </div>
-
-                    <div class="progress-area">
-                        <div class="progress-heading">
-                            <span>Deployment progress</span>
-                            <strong>70%</strong>
-                        </div>
-
-                        <div class="progress-track">
-                            <div class="progress-fill progress-70"></div>
-                        </div>
-                    </div>
-                </article>
-
-                <article
-                    class="deployment-site"
-                    data-status="in-progress"
-                    data-search="dallas distribution center dallas texas"
-                >
-                    <div class="card-top">
-                        <span class="site-code">SITE 03</span>
-                        <span class="status-badge in-progress">In Progress</span>
-                    </div>
-
-                    <h3>Dallas Distribution Center</h3>
-                    <p class="location">Dallas, Texas</p>
-
-                    <div class="card-details">
-                        <div>
-                            <span>Deployment Date</span>
-                            <strong>Sep 10, 2026</strong>
-                        </div>
-
-                        <div>
-                            <span>Deployment Scope</span>
-                            <strong>Full Site Rollout</strong>
-                        </div>
-
-                        <div>
-                            <span>Devices</span>
-                            <strong>32</strong>
-                        </div>
-
-                        <div>
-                            <span>Readiness</span>
-                            <strong>On Site</strong>
-                        </div>
-                    </div>
-
-                    <div class="progress-area">
-                        <div class="progress-heading">
-                            <span>Deployment progress</span>
-                            <strong>85%</strong>
-                        </div>
-
-                        <div class="progress-track">
-                            <div class="progress-fill progress-85"></div>
-                        </div>
-                    </div>
-                </article>
-
-                <article
-                    class="deployment-site"
-                    data-status="completed"
-                    data-search="phoenix regional office phoenix arizona"
-                >
-                    <div class="card-top">
-                        <span class="site-code">SITE 04</span>
-                        <span class="status-badge completed">Completed</span>
-                    </div>
-
-                    <h3>Phoenix Regional Office</h3>
-                    <p class="location">Phoenix, Arizona</p>
-
-                    <div class="card-details">
-                        <div>
-                            <span>Deployment Date</span>
-                            <strong>Sep 5, 2026</strong>
-                        </div>
-
-                        <div>
-                            <span>Deployment Scope</span>
-                            <strong>Security Upgrade</strong>
-                        </div>
-
-                        <div>
-                            <span>Devices</span>
-                            <strong>16</strong>
-                        </div>
-
-                        <div>
-                            <span>Readiness</span>
-                            <strong>Complete</strong>
-                        </div>
-                    </div>
-
-                    <div class="progress-area">
-                        <div class="progress-heading">
-                            <span>Deployment progress</span>
-                            <strong>100%</strong>
-                        </div>
-
-                        <div class="progress-track">
-                            <div class="progress-fill progress-100"></div>
-                        </div>
-                    </div>
-                </article>
-
-            </div>
-
-            <div id="empty-state" class="empty-state">
+            <div id="empty-state" class="empty-state" hidden>
                 <h3>No deployments found</h3>
-                <p>Try changing the status filter or search term.</p>
+                <p id="empty-description">
+                    Try changing the filter or search term.
+                </p>
             </div>
-
         </section>
 
-        <section class="summary-section">
+        <section class="summary-section" aria-labelledby="summary-heading">
             <div class="summary-copy">
-                <p class="eyebrow">CURRENT CYCLE</p>
-                <h2>Deployment Summary</h2>
-
-                <p>
-                    Four locations are being tracked during the current
-                    deployment cycle. One site is complete, one is actively
-                    deploying, one is ready, and one remains in planning.
-                </p>
+                <p class="eyebrow">ALL SITES</p>
+                <h2 id="summary-heading">Deployment Summary</h2>
+                <p id="summary-text"></p>
             </div>
 
             <div class="summary-grid">
                 <div>
                     <span>Planned</span>
-                    <strong>1</strong>
+                    <strong id="summary-planned">0</strong>
                 </div>
 
                 <div>
                     <span>Ready</span>
-                    <strong>1</strong>
+                    <strong id="summary-ready">0</strong>
                 </div>
 
                 <div>
                     <span>In Progress</span>
-                    <strong>1</strong>
+                    <strong id="summary-progress">0</strong>
                 </div>
 
                 <div>
                     <span>Completed</span>
-                    <strong>1</strong>
+                    <strong id="summary-completed">0</strong>
                 </div>
             </div>
         </section>
-
     </main>
 
     <footer>
         <div>
             <strong>Site Deployment Planner</strong>
-            <span>Project 01 Milestone</span>
+            <span>Project 02 · Final MVP</span>
         </div>
 
-        <p>Built for CMPA 4303 • Texas Tech University</p>
+        <p>Built for CMPA 4303 · Texas Tech University</p>
     </footer>
 
     <script src="script.js"></script>
-
 </body>
 </html>
